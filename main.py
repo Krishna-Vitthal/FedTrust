@@ -2,56 +2,45 @@ import os
 import random
 import time
 
-import torch
-import torch.nn as nn
 import matplotlib.pyplot as plt
 import pandas as pd
+import torch
+import torch.nn as nn
 
-from dataset import (
-    load_datasets,
-    split_clients_iid,
-    get_test_loader
-)
-
+from attacks import apply_attack
 from client import Client
+from config import *
+from dataset import (
+    get_test_loader,
+    load_datasets,
+    split_clients_noniid,
+    split_clients_iid,
+)
 from server import Server
 from utils import evaluate
-from attacks import apply_attack
-
-from config import *
 
 
-def main():
+def run_experiment(attack_type, malicious_clients):
 
     start_time = time.time()
 
-    os.makedirs("results", exist_ok=True)
-
-    # ----------------------------------
-    # Load Dataset
-    # ----------------------------------
-
     train_dataset, test_dataset = load_datasets()
 
-    client_loaders = split_clients_iid(train_dataset)
+    if DATA_SPLIT == "noniid":
+
+        client_loaders = split_clients_noniid(train_dataset)
+
+    else:
+
+        client_loaders = split_clients_iid(train_dataset)
 
     test_loader = get_test_loader(test_dataset)
-
-    # ----------------------------------
-    # Create Clients
-    # ----------------------------------
 
     clients = []
 
     for i, loader in enumerate(client_loaders):
 
-        clients.append(
-            Client(i, loader)
-        )
-
-    # ----------------------------------
-    # Create Server
-    # ----------------------------------
+        clients.append(Client(i, loader))
 
     server = Server()
 
@@ -59,38 +48,19 @@ def main():
 
     metrics = {
         "accuracy": [],
-        "loss": [],
-        "precision": [],
-        "recall": [],
-        "f1": []
+        "loss": []
     }
 
-    best_accuracy = 0
-
-    # ----------------------------------
-    # Random Malicious Clients
-    # ----------------------------------
-
-    malicious_clients = set(
-        random.sample(
-            range(NUM_CLIENTS),
-            MALICIOUS_CLIENTS
-        )
-    )
+    best_accuracy = 0.0
 
     print("=" * 60)
-    print("Malicious Clients :", malicious_clients)
-    print("Attack Type       :", ATTACK_TYPE)
+    print(f"Attack Type       : {attack_type}")
+    print(f"Malicious Clients : {sorted(malicious_clients)}")
     print("=" * 60)
-
-    # ----------------------------------
-    # Federated Learning
-    # ----------------------------------
 
     for round_num in range(ROUNDS):
 
         print("\n" + "=" * 50)
-
         print(f"Round {round_num + 1}")
 
         global_weights = server.get_weights()
@@ -103,12 +73,9 @@ def main():
 
             update = client.train()
 
-            if client.client_id in malicious_clients:
+            if attack_type != "none" and client.client_id in malicious_clients:
 
-                update = apply_attack(
-                    update,
-                    ATTACK_TYPE
-                )
+                update = apply_attack(update, attack_type)
 
             client_updates.append(update)
 
@@ -117,17 +84,12 @@ def main():
         accuracy, loss = evaluate(
             server.get_model(),
             test_loader,
-            criterion
+            criterion,
         )
 
         metrics["accuracy"].append(accuracy)
         metrics["loss"].append(loss)
-        metrics["precision"].append(None)
-        metrics["recall"].append(None)
-        metrics["f1"].append(None)
-
         print(f"Accuracy : {accuracy:.2f}%")
-
         print(f"Loss     : {loss:.4f}")
 
         if accuracy > best_accuracy:
@@ -136,41 +98,31 @@ def main():
 
             torch.save(
                 server.get_model().state_dict(),
-                f"results/best_model_{ATTACK_TYPE}_{MALICIOUS_CLIENTS}.pth"
+                f"results/best_model_{attack_type}_{MALICIOUS_CLIENTS}.pth"
             )
-
-    print("\n" + "=" * 60)
-
-    print("Training Complete!")
-
-    print(f"Best Accuracy : {best_accuracy:.2f}%")
 
     training_time = time.time() - start_time
 
     final_accuracy = metrics["accuracy"][-1] if metrics["accuracy"] else 0.0
-
     final_loss = metrics["loss"][-1] if metrics["loss"] else 0.0
 
     results = pd.DataFrame({
         "Round": range(1, ROUNDS + 1),
         "Accuracy": metrics["accuracy"],
-        "Loss": metrics["loss"],
-        "Precision": metrics["precision"],
-        "Recall": metrics["recall"],
-        "F1": metrics["f1"]
+        "Loss": metrics["loss"]
     })
 
     results.to_csv(
-        f"results/results_{ATTACK_TYPE}_{MALICIOUS_CLIENTS}.csv",
+        f"results/results_{attack_type}_{MALICIOUS_CLIENTS}.csv",
         index=False
     )
 
     with open(
-        f"results/summary_{ATTACK_TYPE}_{MALICIOUS_CLIENTS}.txt",
-        "w"
+        f"results/summary_{attack_type}_{MALICIOUS_CLIENTS}.txt",
+        "w",
     ) as f:
 
-        f.write(f"Attack Type: {ATTACK_TYPE}\n")
+        f.write(f"Attack Type: {attack_type}\n")
         f.write(f"Malicious Clients: {MALICIOUS_CLIENTS}\n")
         f.write(f"Malicious Client IDs: {sorted(malicious_clients)}\n")
         f.write(f"Rounds: {ROUNDS}\n")
@@ -179,67 +131,110 @@ def main():
         f.write(f"Final Loss: {final_loss:.4f}\n")
         f.write(f"Training Time: {training_time:.2f} sec\n")
 
-    # ----------------------------------
-    # Accuracy Plot
-    # ----------------------------------
-
-    plt.figure(figsize=(8,5))
-
-    plt.plot(
-        range(1, ROUNDS + 1),
-        metrics["accuracy"],
-        marker="o"
-    )
-
+    plt.figure(figsize=(8, 5))
+    plt.plot(range(1, ROUNDS + 1), metrics["accuracy"], marker="o")
     plt.xlabel("Communication Round")
-
     plt.ylabel("Accuracy (%)")
-
-    plt.title("FedAvg Accuracy")
-
+    plt.title(f"FedAvg Accuracy - {attack_type}")
     plt.grid(True)
-
     plt.savefig(
-        f"results/accuracy_{ATTACK_TYPE}_{MALICIOUS_CLIENTS}.png",
+        f"results/accuracy_{attack_type}_{MALICIOUS_CLIENTS}.png",
         dpi=300,
         bbox_inches="tight"
     )
-
     plt.close()
 
-    # ----------------------------------
-    # Loss Plot
-    # ----------------------------------
-
-    plt.figure(figsize=(8,5))
-
-    plt.plot(
-        range(1, ROUNDS + 1),
-        metrics["loss"],
-        marker="o"
-    )
-
+    plt.figure(figsize=(8, 5))
+    plt.plot(range(1, ROUNDS + 1), metrics["loss"], marker="o")
     plt.xlabel("Communication Round")
-
     plt.ylabel("Loss")
-
-    plt.title("FedAvg Loss")
-
+    plt.title(f"FedAvg Loss - {attack_type}")
     plt.grid(True)
-
     plt.savefig(
-        f"results/loss_{ATTACK_TYPE}_{MALICIOUS_CLIENTS}.png",
+        f"results/loss_{attack_type}_{MALICIOUS_CLIENTS}.png",
         dpi=300,
         bbox_inches="tight"
     )
-
     plt.close()
 
     print("\n========== EXPERIMENT SUMMARY ==========")
-    print(f"Attack Type       : {ATTACK_TYPE}")
+    print(f"Attack Type       : {attack_type}")
     print(f"Malicious Clients : {sorted(malicious_clients)}")
     print(f"Best Accuracy     : {best_accuracy:.2f}%")
     print(f"Training Time     : {training_time:.2f} sec")
+    print("========================================")
+
+    return {
+        "attack_type": attack_type,
+        "data_split": DATA_SPLIT,
+        "malicious_clients": sorted(malicious_clients),
+        "final_accuracy": final_accuracy,
+        "best_accuracy": best_accuracy,
+        "final_loss": final_loss,
+        "training_time": training_time,
+    }
+
+
+def main():
+
+    os.makedirs("results", exist_ok=True)
+
+    rng = random.Random(SEED)
+    num_malicious = min(MALICIOUS_CLIENTS, NUM_CLIENTS)
+
+    malicious_clients = set(
+        rng.sample(
+            range(NUM_CLIENTS),
+            num_malicious
+        )
+    )
+
+    attack_types = [
+        "none",
+        "sign",
+        "scaling",
+        "gaussian",
+        "random",
+        "zero",
+        "mixed",
+    ]
+
+    summaries = []
+
+    for attack_type in attack_types:
+
+        summaries.append(
+            run_experiment(attack_type, malicious_clients)
+        )
+
+    print("\n========== ALL ATTACKS COMPLETE ==========")
+
+    for summary in summaries:
+
+        print(
+            f"{summary['attack_type']:>8} : best={summary['best_accuracy']:.2f}% "
+            f"time={summary['training_time']:.2f} sec"
+        )
+
+    summary_rows = pd.DataFrame([
+        {
+            "Data Split": summary["data_split"],
+            "Attack": summary["attack_type"],
+            "Malicious Clients": MALICIOUS_CLIENTS,
+            "Malicious Client IDs": str(summary["malicious_clients"]),
+            "Best Accuracy": summary["best_accuracy"],
+            "Final Accuracy": summary["final_accuracy"],
+            "Final Loss": summary["final_loss"],
+            "Training Time": summary["training_time"],
+        }
+        for summary in summaries
+    ])
+
+    summary_rows.to_csv(
+        "results/experiment_summary.csv",
+        index=False
+    )
+
     print("========================================")
 
 

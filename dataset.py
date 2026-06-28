@@ -76,6 +76,45 @@ def split_clients_iid(train_dataset):
 
 
 # ----------------------------
+# Non-IID Split
+# ----------------------------
+
+def split_clients_noniid(train_dataset):
+
+    labels = torch.tensor(train_dataset.targets)
+
+    sorted_indices = torch.argsort(labels)
+
+    client_size = len(train_dataset) // NUM_CLIENTS
+
+    client_loaders = []
+
+    for i in range(NUM_CLIENTS):
+
+        start = i * client_size
+
+        if i == NUM_CLIENTS - 1:
+            end = len(train_dataset)
+        else:
+            end = (i + 1) * client_size
+
+        subset = Subset(
+            train_dataset,
+            sorted_indices[start:end]
+        )
+
+        loader = DataLoader(
+            subset,
+            batch_size=BATCH_SIZE,
+            shuffle=True
+        )
+
+        client_loaders.append(loader)
+
+    return client_loaders
+
+
+# ----------------------------
 # Test Loader
 # ----------------------------
 

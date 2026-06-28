@@ -18,6 +18,12 @@ BATCH_SIZE = 32
 LEARNING_RATE = 0.001
 
 # ----------------------------------
+# Data Split Configuration
+# ----------------------------------
+
+DATA_SPLIT = "iid"
+
+# ----------------------------------
 # Attack Configuration
 # ----------------------------------
 
@@ -41,9 +47,9 @@ ATTACK_POOL = (
     "zero"
 )
 
-ATTACK_SCALE = 50
+ATTACK_SCALE = 8
 
-GAUSSIAN_STD = 5.0
+GAUSSIAN_STD = 1.0
 
 # ----------------------------------
 # Device

@@ -16,7 +16,7 @@ def sign_flipping(client_update):
 
     for key in malicious_update["weights"]:
 
-        malicious_update["weights"][key] *= -ATTACK_SCALE
+        malicious_update["weights"][key] *= -1
 
     return malicious_update
 
@@ -31,7 +31,7 @@ def model_scaling(client_update):
 
     for key in malicious_update["weights"]:
 
-        malicious_update["weights"][key] *= -(ATTACK_SCALE * 2)
+        malicious_update["weights"][key] *= -ATTACK_SCALE
 
     return malicious_update
 
@@ -49,7 +49,7 @@ def gaussian_noise(client_update):
         noise = (
             torch.randn_like(
                 malicious_update["weights"][key]
-            ) * GAUSSIAN_STD * ATTACK_SCALE
+            ) * GAUSSIAN_STD
         )
 
         malicious_update["weights"][key] += noise

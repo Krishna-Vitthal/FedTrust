@@ -29,6 +29,26 @@ MALICIOUS_CLIENTS = 2
 # "zero"
 
 ATTACK_TYPE = "sign"
+# ----------------------------------
+# Attack Configuration
+# ----------------------------------
+
+MALICIOUS_CLIENTS = 2
+
+# Options:
+# "sign"
+# "gaussian"
+# "random"
+# "zero"
+# "scaling"
+
+ATTACK_TYPE = "scaling"
+
+# Strength of attack
+ATTACK_SCALE = 20
+
+# Standard deviation for Gaussian attack
+GAUSSIAN_STD = 2.0
 
 # ----------------------------------
 # Device

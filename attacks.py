@@ -1,10 +1,11 @@
 import copy
-import random
 import torch
+
+from config import ATTACK_SCALE, GAUSSIAN_STD
 
 
 # -------------------------------------------------------
-# Sign Flipping Attack
+# Sign Flipping
 # -------------------------------------------------------
 
 def sign_flipping(client_update):
@@ -19,18 +20,35 @@ def sign_flipping(client_update):
 
 
 # -------------------------------------------------------
-# Gaussian Noise Attack
+# Model Scaling Attack (Strong)
 # -------------------------------------------------------
 
-def gaussian_noise(client_update, std=0.5):
+def model_scaling(client_update):
 
     malicious_update = copy.deepcopy(client_update)
 
     for key in malicious_update["weights"]:
 
-        noise = torch.randn_like(
-            malicious_update["weights"][key]
-        ) * std
+        malicious_update["weights"][key] *= -ATTACK_SCALE
+
+    return malicious_update
+
+
+# -------------------------------------------------------
+# Gaussian Noise Attack
+# -------------------------------------------------------
+
+def gaussian_noise(client_update):
+
+    malicious_update = copy.deepcopy(client_update)
+
+    for key in malicious_update["weights"]:
+
+        noise = (
+            torch.randn_like(
+                malicious_update["weights"][key]
+            ) * GAUSSIAN_STD
+        )
 
         malicious_update["weights"][key] += noise
 
@@ -38,7 +56,7 @@ def gaussian_noise(client_update, std=0.5):
 
 
 # -------------------------------------------------------
-# Random Weight Attack
+# Random Model Attack
 # -------------------------------------------------------
 
 def random_weights(client_update):
@@ -55,7 +73,7 @@ def random_weights(client_update):
 
 
 # -------------------------------------------------------
-# Zero Weight Attack
+# Zero Model Attack
 # -------------------------------------------------------
 
 def zero_weights(client_update):
@@ -72,7 +90,7 @@ def zero_weights(client_update):
 
 
 # -------------------------------------------------------
-# Attack Dispatcher
+# Dispatcher
 # -------------------------------------------------------
 
 def apply_attack(client_update, attack_type):
@@ -80,6 +98,10 @@ def apply_attack(client_update, attack_type):
     if attack_type == "sign":
 
         return sign_flipping(client_update)
+
+    elif attack_type == "scaling":
+
+        return model_scaling(client_update)
 
     elif attack_type == "gaussian":
 

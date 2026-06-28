@@ -1,6 +1,11 @@
+import os
+import random
+import time
+
 import torch
 import torch.nn as nn
 import matplotlib.pyplot as plt
+import pandas as pd
 
 from dataset import (
     load_datasets,
@@ -11,15 +16,20 @@ from dataset import (
 from client import Client
 from server import Server
 from utils import evaluate
+from attacks import apply_attack
 
 from config import *
 
 
 def main():
 
-    # -----------------------
+    start_time = time.time()
+
+    os.makedirs("results", exist_ok=True)
+
+    # ----------------------------------
     # Load Dataset
-    # -----------------------
+    # ----------------------------------
 
     train_dataset, test_dataset = load_datasets()
 
@@ -27,9 +37,9 @@ def main():
 
     test_loader = get_test_loader(test_dataset)
 
-    # -----------------------
+    # ----------------------------------
     # Create Clients
-    # -----------------------
+    # ----------------------------------
 
     clients = []
 
@@ -39,27 +49,47 @@ def main():
             Client(i, loader)
         )
 
-    # -----------------------
+    # ----------------------------------
     # Create Server
-    # -----------------------
+    # ----------------------------------
 
     server = Server()
 
     criterion = nn.CrossEntropyLoss()
 
-    accuracy_history = []
-
-    loss_history = []
+    metrics = {
+        "accuracy": [],
+        "loss": [],
+        "precision": [],
+        "recall": [],
+        "f1": []
+    }
 
     best_accuracy = 0
 
-    # -----------------------
+    # ----------------------------------
+    # Random Malicious Clients
+    # ----------------------------------
+
+    malicious_clients = set(
+        random.sample(
+            range(NUM_CLIENTS),
+            MALICIOUS_CLIENTS
+        )
+    )
+
+    print("=" * 60)
+    print("Malicious Clients :", malicious_clients)
+    print("Attack Type       :", ATTACK_TYPE)
+    print("=" * 60)
+
+    # ----------------------------------
     # Federated Learning
-    # -----------------------
+    # ----------------------------------
 
     for round_num in range(ROUNDS):
 
-        print("=" * 50)
+        print("\n" + "=" * 50)
 
         print(f"Round {round_num + 1}")
 
@@ -73,19 +103,28 @@ def main():
 
             update = client.train()
 
+            if client.client_id in malicious_clients:
+
+                update = apply_attack(
+                    update,
+                    ATTACK_TYPE
+                )
+
             client_updates.append(update)
 
         server.aggregate(client_updates)
 
         accuracy, loss = evaluate(
-            server.global_model,
+            server.get_model(),
             test_loader,
             criterion
         )
 
-        accuracy_history.append(accuracy)
-
-        loss_history.append(loss)
+        metrics["accuracy"].append(accuracy)
+        metrics["loss"].append(loss)
+        metrics["precision"].append(None)
+        metrics["recall"].append(None)
+        metrics["f1"].append(None)
 
         print(f"Accuracy : {accuracy:.2f}%")
 
@@ -96,25 +135,59 @@ def main():
             best_accuracy = accuracy
 
             torch.save(
-                server.global_model.state_dict(),
-                "best_model.pth"
+                server.get_model().state_dict(),
+                f"results/best_model_{ATTACK_TYPE}_{MALICIOUS_CLIENTS}.pth"
             )
 
-    print("=" * 50)
+    print("\n" + "=" * 60)
 
     print("Training Complete!")
 
     print(f"Best Accuracy : {best_accuracy:.2f}%")
 
-    # -----------------------
-    # Plot Accuracy
-    # -----------------------
+    training_time = time.time() - start_time
+
+    final_accuracy = metrics["accuracy"][-1] if metrics["accuracy"] else 0.0
+
+    final_loss = metrics["loss"][-1] if metrics["loss"] else 0.0
+
+    results = pd.DataFrame({
+        "Round": range(1, ROUNDS + 1),
+        "Accuracy": metrics["accuracy"],
+        "Loss": metrics["loss"],
+        "Precision": metrics["precision"],
+        "Recall": metrics["recall"],
+        "F1": metrics["f1"]
+    })
+
+    results.to_csv(
+        f"results/results_{ATTACK_TYPE}_{MALICIOUS_CLIENTS}.csv",
+        index=False
+    )
+
+    with open(
+        f"results/summary_{ATTACK_TYPE}_{MALICIOUS_CLIENTS}.txt",
+        "w"
+    ) as f:
+
+        f.write(f"Attack Type: {ATTACK_TYPE}\n")
+        f.write(f"Malicious Clients: {MALICIOUS_CLIENTS}\n")
+        f.write(f"Malicious Client IDs: {sorted(malicious_clients)}\n")
+        f.write(f"Rounds: {ROUNDS}\n")
+        f.write(f"Best Accuracy: {best_accuracy:.2f}%\n")
+        f.write(f"Final Accuracy: {final_accuracy:.2f}%\n")
+        f.write(f"Final Loss: {final_loss:.4f}\n")
+        f.write(f"Training Time: {training_time:.2f} sec\n")
+
+    # ----------------------------------
+    # Accuracy Plot
+    # ----------------------------------
 
     plt.figure(figsize=(8,5))
 
     plt.plot(
         range(1, ROUNDS + 1),
-        accuracy_history,
+        metrics["accuracy"],
         marker="o"
     )
 
@@ -126,19 +199,23 @@ def main():
 
     plt.grid(True)
 
-    plt.savefig("accuracy.png")
+    plt.savefig(
+        f"results/accuracy_{ATTACK_TYPE}_{MALICIOUS_CLIENTS}.png",
+        dpi=300,
+        bbox_inches="tight"
+    )
 
     plt.close()
 
-    # -----------------------
-    # Plot Loss
-    # -----------------------
+    # ----------------------------------
+    # Loss Plot
+    # ----------------------------------
 
     plt.figure(figsize=(8,5))
 
     plt.plot(
         range(1, ROUNDS + 1),
-        loss_history,
+        metrics["loss"],
         marker="o"
     )
 
@@ -150,9 +227,20 @@ def main():
 
     plt.grid(True)
 
-    plt.savefig("loss.png")
+    plt.savefig(
+        f"results/loss_{ATTACK_TYPE}_{MALICIOUS_CLIENTS}.png",
+        dpi=300,
+        bbox_inches="tight"
+    )
 
     plt.close()
+
+    print("\n========== EXPERIMENT SUMMARY ==========")
+    print(f"Attack Type       : {ATTACK_TYPE}")
+    print(f"Malicious Clients : {sorted(malicious_clients)}")
+    print(f"Best Accuracy     : {best_accuracy:.2f}%")
+    print(f"Training Time     : {training_time:.2f} sec")
+    print("========================================")
 
 
 if __name__ == "__main__":

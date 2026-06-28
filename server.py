@@ -22,6 +22,12 @@ class Server:
 
     # ----------------------------------
 
+    def get_model(self):
+
+        return self.global_model
+
+    # ----------------------------------
+
     def aggregate(self, client_updates):
 
         new_weights = fedavg(client_updates)

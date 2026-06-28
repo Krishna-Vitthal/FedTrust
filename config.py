@@ -2,9 +2,9 @@ import random
 import numpy as np
 import torch
 
-# ----------------------------
-# Federated Learning Parameters
-# ----------------------------
+# ----------------------------------
+# Federated Learning Configuration
+# ----------------------------------
 
 NUM_CLIENTS = 10
 
@@ -16,23 +16,31 @@ BATCH_SIZE = 32
 
 LEARNING_RATE = 0.001
 
-# ----------------------------
-# Attack Parameters
-# ----------------------------
+# ----------------------------------
+# Attack Configuration
+# ----------------------------------
 
 MALICIOUS_CLIENTS = 2
 
-# ----------------------------
+# Options:
+# "sign"
+# "gaussian"
+# "random"
+# "zero"
+
+ATTACK_TYPE = "sign"
+
+# ----------------------------------
 # Device
-# ----------------------------
+# ----------------------------------
 
 DEVICE = torch.device(
     "cuda" if torch.cuda.is_available() else "cpu"
 )
 
-# ----------------------------
-# Reproducibility
-# ----------------------------
+# ----------------------------------
+# Random Seed
+# ----------------------------------
 
 SEED = 42
 

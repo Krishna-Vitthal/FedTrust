@@ -1,4 +1,5 @@
 import random
+
 import numpy as np
 import torch
 
@@ -24,31 +25,25 @@ MALICIOUS_CLIENTS = 2
 
 # Options:
 # "sign"
-# "gaussian"
-# "random"
-# "zero"
-
-ATTACK_TYPE = "sign"
-# ----------------------------------
-# Attack Configuration
-# ----------------------------------
-
-MALICIOUS_CLIENTS = 2
-
-# Options:
-# "sign"
-# "gaussian"
-# "random"
-# "zero"
 # "scaling"
+# "gaussian"
+# "random"
+# "zero"
+# "mixed"
 
-ATTACK_TYPE = "scaling"
+ATTACK_TYPE = "mixed"
 
-# Strength of attack
-ATTACK_SCALE = 20
+ATTACK_POOL = (
+    "sign",
+    "scaling",
+    "gaussian",
+    "random",
+    "zero"
+)
 
-# Standard deviation for Gaussian attack
-GAUSSIAN_STD = 2.0
+ATTACK_SCALE = 50
+
+GAUSSIAN_STD = 5.0
 
 # ----------------------------------
 # Device

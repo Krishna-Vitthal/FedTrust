@@ -1,7 +1,9 @@
 import copy
+import random
+
 import torch
 
-from config import ATTACK_SCALE, GAUSSIAN_STD
+from config import ATTACK_SCALE, ATTACK_POOL, GAUSSIAN_STD
 
 
 # -------------------------------------------------------
@@ -14,7 +16,7 @@ def sign_flipping(client_update):
 
     for key in malicious_update["weights"]:
 
-        malicious_update["weights"][key] *= -1
+        malicious_update["weights"][key] *= -ATTACK_SCALE
 
     return malicious_update
 
@@ -29,7 +31,7 @@ def model_scaling(client_update):
 
     for key in malicious_update["weights"]:
 
-        malicious_update["weights"][key] *= -ATTACK_SCALE
+        malicious_update["weights"][key] *= -(ATTACK_SCALE * 2)
 
     return malicious_update
 
@@ -47,7 +49,7 @@ def gaussian_noise(client_update):
         noise = (
             torch.randn_like(
                 malicious_update["weights"][key]
-            ) * GAUSSIAN_STD
+            ) * GAUSSIAN_STD * ATTACK_SCALE
         )
 
         malicious_update["weights"][key] += noise
@@ -65,8 +67,8 @@ def random_weights(client_update):
 
     for key in malicious_update["weights"]:
 
-        malicious_update["weights"][key] = torch.randn_like(
-            malicious_update["weights"][key]
+        malicious_update["weights"][key] = (
+            torch.randn_like(malicious_update["weights"][key]) * ATTACK_SCALE
         )
 
     return malicious_update
@@ -94,6 +96,10 @@ def zero_weights(client_update):
 # -------------------------------------------------------
 
 def apply_attack(client_update, attack_type):
+
+    if attack_type == "mixed":
+
+        attack_type = random.choice(ATTACK_POOL)
 
     if attack_type == "sign":
 

@@ -131,6 +131,52 @@ def run_experiment(attack_type, malicious_clients):
         f.write(f"Final Loss: {final_loss:.4f}\n")
         f.write(f"Training Time: {training_time:.2f} sec\n")
 
+    trust_history = server.get_trust_history()
+
+    if USE_TRUST and trust_history:
+
+        trust_df = pd.DataFrame(trust_history)
+
+        trust_df.insert(0, "Round", range(1, len(trust_df) + 1))
+
+        trust_df.to_csv(
+            f"results/trust_history_{attack_type}_{MALICIOUS_CLIENTS}.csv",
+            index=False
+        )
+
+        plt.figure(figsize=(10, 6))
+
+        for client_id in sorted(
+            column for column in trust_df.columns if column != "Round"
+        ):
+
+            values = trust_df[client_id]
+
+            is_malicious = client_id in malicious_clients
+
+            plt.plot(
+                trust_df["Round"],
+                values,
+                label=f"Client {client_id}",
+                linewidth=2.2 if is_malicious else 1.2,
+                alpha=0.9 if is_malicious else 0.55,
+                linestyle="-" if is_malicious else "--",
+            )
+
+        plt.xlabel("Communication Round")
+        plt.ylabel("Trust")
+        plt.ylim(0.0, 1.05)
+        plt.title(f"Trust Trajectories - {attack_type}")
+        plt.grid(True, alpha=0.3)
+        plt.legend(ncol=2, fontsize=8, frameon=False)
+        plt.tight_layout()
+        plt.savefig(
+            f"results/trust_trajectory_{attack_type}_{MALICIOUS_CLIENTS}.png",
+            dpi=300,
+            bbox_inches="tight"
+        )
+        plt.close()
+
     plt.figure(figsize=(8, 5))
     plt.plot(range(1, ROUNDS + 1), metrics["accuracy"], marker="o")
     plt.xlabel("Communication Round")

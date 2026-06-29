@@ -20,24 +20,62 @@ class Client:
 
         self.criterion = nn.CrossEntropyLoss()
 
-    # ----------------------------
+        # -----------------------------------
+        # Compute Label Histogram Once
+        # -----------------------------------
+
+        self.label_histogram = self.compute_label_histogram()
+
+    # =====================================================
+    # Label Histogram
+    # =====================================================
+
+    def compute_label_histogram(self):
+
+        histogram = torch.zeros(10)
+
+        total = 0
+
+        for _, labels in self.train_loader:
+
+            for label in labels:
+
+                histogram[label.item()] += 1
+
+                total += 1
+
+        if total > 0:
+
+            histogram /= total
+
+        return histogram.tolist()
+
+    # =====================================================
+    # Load Global Model
+    # =====================================================
 
     def set_weights(self, global_weights):
 
         self.model.load_state_dict(
+
             copy.deepcopy(global_weights)
+
         )
 
-    # ----------------------------
+    # =====================================================
+    # Local Training
+    # =====================================================
 
     def train(self):
 
         self.model.train()
 
-        # Fresh optimizer every communication round
         optimizer = optim.Adam(
+
             self.model.parameters(),
+
             lr=LEARNING_RATE
+
         )
 
         total_loss = 0
@@ -62,16 +100,28 @@ class Client:
 
                 total_loss += loss.item()
 
+        # -----------------------------------
+        # Send Local Update
+        # -----------------------------------
+
         return {
 
+            "client_id": self.client_id,
+
             "weights": copy.deepcopy(
+
                 self.model.state_dict()
+
             ),
 
             "num_samples": len(
+
                 self.train_loader.dataset
+
             ),
 
-            "loss": total_loss
+            "loss": total_loss,
+
+            "label_histogram": self.label_histogram
 
         }

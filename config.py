@@ -37,6 +37,14 @@ ATTACK_SCALE = 8
 
 GAUSSIAN_STD = 1.0
 
+ATTACK_POOL = [
+    "sign",
+    "scaling",
+    "gaussian",
+    "random",
+    "zero",
+]
+
 # =====================================================
 # Trust Configuration (FedTrust)
 # =====================================================

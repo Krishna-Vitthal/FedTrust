@@ -10,7 +10,6 @@ from config import (
     PEER_SIMILARITY_THRESHOLD
 )
 
-
 # =====================================================
 # Evaluation
 # =====================================================
@@ -66,7 +65,9 @@ def flatten_weights(weights):
     for tensor in weights.values():
 
         vectors.append(
-            tensor.view(-1)
+
+            tensor.reshape(-1)
+
         )
 
     return torch.cat(vectors)
@@ -83,8 +84,13 @@ def cosine_similarity(weights1, weights2):
     v2 = flatten_weights(weights2)
 
     similarity = F.cosine_similarity(
+
         v1.unsqueeze(0),
-        v2.unsqueeze(0)
+
+        v2.unsqueeze(0),
+
+        dim=1
+
     )
 
     return similarity.item()
@@ -98,7 +104,13 @@ def gradient_norm(weights):
 
     vector = flatten_weights(weights)
 
-    return torch.norm(vector, p=2).item()
+    return torch.norm(
+
+        vector,
+
+        p=2
+
+    ).item()
 
 
 # =====================================================
@@ -107,13 +119,30 @@ def gradient_norm(weights):
 
 def histogram_similarity(hist1, hist2):
 
-    h1 = torch.tensor(hist1, dtype=torch.float32)
+    h1 = torch.tensor(
 
-    h2 = torch.tensor(hist2, dtype=torch.float32)
+        hist1,
+
+        dtype=torch.float32
+
+    )
+
+    h2 = torch.tensor(
+
+        hist2,
+
+        dtype=torch.float32
+
+    )
 
     similarity = F.cosine_similarity(
+
         h1.unsqueeze(0),
-        h2.unsqueeze(0)
+
+        h2.unsqueeze(0),
+
+        dim=1
+
     )
 
     return similarity.item()
@@ -151,12 +180,15 @@ def build_peer_groups(client_updates):
 
             hist_j = client_updates[j]["label_histogram"]
 
-            sim = histogram_similarity(
+            similarity = histogram_similarity(
+
                 hist_i,
+
                 hist_j
+
             )
 
-            if sim >= PEER_SIMILARITY_THRESHOLD:
+            if similarity >= PEER_SIMILARITY_THRESHOLD:
 
                 assigned.add(j)
 
@@ -171,32 +203,58 @@ def build_peer_groups(client_updates):
 # Peer Average Update
 # =====================================================
 
-def peer_average_update(client_updates, peer_indices, exclude_index=None, fallback_weights=None):
+def peer_average_update(
 
-    avg = {}
+    client_updates,
+
+    peer_indices,
+
+    exclude_index=None,
+
+    fallback_weights=None
+
+):
 
     peer_list = [
-        index
-        for index in peer_indices
-        if index != exclude_index
+
+        idx
+
+        for idx in peer_indices
+
+        if idx != exclude_index
+
     ]
 
-    if not peer_list:
+    if len(peer_list) == 0:
 
         if fallback_weights is None:
 
-            return global_average_update(client_updates)
+            return global_average_update(
 
-        return copy.deepcopy(fallback_weights)
+                client_updates
+
+            )
+
+        return copy.deepcopy(
+
+            fallback_weights
+
+        )
+
+    average = {}
 
     first = client_updates[
+
         peer_list[0]
+
     ]["weights"]
 
     for key in first:
 
-        avg[key] = torch.zeros_like(
+        average[key] = torch.zeros_like(
+
             first[key]
+
         )
 
     for idx in peer_list:
@@ -205,13 +263,13 @@ def peer_average_update(client_updates, peer_indices, exclude_index=None, fallba
 
         for key in weights:
 
-            avg[key] += weights[key]
+            average[key] += weights[key]
 
-    for key in avg:
+    for key in average:
 
-        avg[key] /= len(peer_list)
+        average[key] /= len(peer_list)
 
-    return avg
+    return average
 
 
 # =====================================================
@@ -220,14 +278,16 @@ def peer_average_update(client_updates, peer_indices, exclude_index=None, fallba
 
 def global_average_update(client_updates):
 
-    avg = {}
+    average = {}
 
     first = client_updates[0]["weights"]
 
     for key in first:
 
-        avg[key] = torch.zeros_like(
+        average[key] = torch.zeros_like(
+
             first[key]
+
         )
 
     for client in client_updates:
@@ -236,47 +296,84 @@ def global_average_update(client_updates):
 
         for key in weights:
 
-            avg[key] += weights[key]
+            average[key] += weights[key]
 
-    for key in avg:
+    for key in average:
 
-        avg[key] /= len(client_updates)
+        average[key] /= len(client_updates)
 
-    return avg
-
-
+    return average
 # =====================================================
-# Gradient Norm Score
+# Gradient Norm Score (MAD-Based)
 # =====================================================
 
 def compute_norm_scores(client_updates):
 
-    norms = []
+    norms = [
 
-    for client in client_updates:
+        gradient_norm(client["weights"])
 
-        norms.append(
-            gradient_norm(client["weights"])
-        )
+        for client in client_updates
+
+    ]
+
+    norms_tensor = torch.tensor(
+
+        norms,
+
+        dtype=torch.float32
+
+    )
 
     median = torch.median(
-        torch.tensor(norms)
+
+        norms_tensor
+
+    )
+
+    deviations = torch.abs(
+
+        norms_tensor - median
+
+    )
+
+    mad = torch.median(
+
+        deviations
+
     ).item()
+
+    mad = max(
+
+        mad,
+
+        1e-6
+
+    )
 
     scores = []
 
     for norm in norms:
 
+        z = abs(
+
+            norm - median.item()
+
+        ) / mad
+
         score = torch.exp(
+
             torch.tensor(
-                -abs(norm - median) /
-                (median + 1e-8)
+
+                -0.5 * z
+
             )
+
         ).item()
 
         scores.append(score)
 
-    return scores
+    return normalize_scores(scores)
 
 
 # =====================================================
@@ -291,47 +388,92 @@ def normalize_scores(scores):
 
     if maximum - minimum < 1e-8:
 
-        return [1.0] * len(scores)
+        return [
 
-    normalized = []
+            1.0
 
-    for score in scores:
+            for _ in scores
 
-        normalized.append(
+        ]
 
-            (score - minimum) /
-            (maximum - minimum)
+    return [
 
-        )
+        (score - minimum)
 
-    return normalized
+        /
+
+        (maximum - minimum)
+
+        for score in scores
+
+    ]
 
 
 # =====================================================
-# Alignment Score
+# Leave-One-Out Alignment Score
 # =====================================================
 
 def compute_alignment_scores(client_updates):
 
-    global_update = global_average_update(
+    num_clients = len(
+
         client_updates
+
     )
 
     scores = []
 
-    for client in client_updates:
+    for i in range(num_clients):
+
+        leave_one_out = {}
+
+        first = client_updates[0]["weights"]
+
+        for key in first:
+
+            leave_one_out[key] = torch.zeros_like(
+
+                first[key]
+
+            )
+
+        count = 0
+
+        for j, client in enumerate(client_updates):
+
+            if j == i:
+
+                continue
+
+            count += 1
+
+            weights = client["weights"]
+
+            for key in weights:
+
+                leave_one_out[key] += weights[key]
+
+        for key in leave_one_out:
+
+            leave_one_out[key] /= count
 
         similarity = cosine_similarity(
 
-            client["weights"],
+            client_updates[i]["weights"],
 
-            global_update
+            leave_one_out
 
         )
 
+        similarity = (
+
+            similarity + 1
+
+        ) / 2
+
         scores.append(
 
-            (similarity + 1) / 2
+            similarity
 
         )
 

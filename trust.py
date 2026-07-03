@@ -35,6 +35,11 @@ class TrustManager:
 
         }
 
+        self.recovery_counter = {
+            client_id: 0
+            for client_id in range(num_clients)
+        }
+
         # -------------------------------
         # Previous Updates
         # -------------------------------
@@ -314,29 +319,38 @@ class TrustManager:
 
         for client_id in self.trust_scores.keys():
 
-            old = self.trust_scores[client_id]
+            old_trust = self.trust_scores[client_id]
 
             behavior = self.behavior_scores[
                 client_id
             ]
 
-            new = (
+            new_trust = (
 
-                ALPHA * old +
+                ALPHA * old_trust +
 
                 (1 - ALPHA) * behavior
 
             )
 
-            new = max(
+            if behavior >= RECOVERY_THRESHOLD:
+                self.recovery_counter[client_id] += 1
+            else:
+                self.recovery_counter[client_id] = 0
+
+            if self.recovery_counter[client_id] >= RECOVERY_ROUNDS:
+                new_trust += RECOVERY_STEP
+                self.recovery_counter[client_id] = 0
+
+            new_trust = max(
 
                 MIN_TRUST,
 
-                min(MAX_TRUST, new)
+                min(MAX_TRUST, new_trust)
 
             )
 
-            self.trust_scores[client_id] = new
+            self.trust_scores[client_id] = new_trust
 
         self.trust_history.append(
 

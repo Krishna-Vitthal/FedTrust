@@ -7,6 +7,32 @@ import torch
 # =====================================================
 
 NUM_CLIENTS = 10
+RECOVERY_THRESHOLD = 0.80
+RECOVERY_ROUNDS = 5
+RECOVERY_STEP = 0.02
+
+RUN_ALL_ATTACKS = True
+
+BENCHMARK_MODE = "comparison"
+
+# Options:
+# "comparison"
+# "ablation"
+# "sensitivity"
+# "stress"
+# "runtime"
+# "diagnostics"
+# "full"
+
+RESULTS_DIR = "results"
+
+EXPERIMENT_TAG = "default"
+
+SAVE_DIAGNOSTICS = False
+
+USE_TRIMMED_MEAN = True
+
+TRIM_RATIO = 0.20
 
 ROUNDS = 20
 
@@ -20,10 +46,18 @@ LEARNING_RATE = 0.001
 # Dataset Split
 # =====================================================
 
+# Options:
 # "iid"
 # "noniid"
+# "dirichlet"
 
-DATA_SPLIT = "iid"
+DATA_SPLIT = "dirichlet"
+
+# Dirichlet concentration parameter
+# Smaller = more heterogeneous
+# Larger = closer to IID
+
+DIRICHLET_ALPHA = 0.5
 
 # =====================================================
 # Attack Configuration
@@ -46,14 +80,25 @@ ATTACK_POOL = [
 ]
 
 # =====================================================
-# Trust Configuration (FedTrust)
+# Trust Configuration
 # =====================================================
 
 USE_TRUST = True
 
-# -----------------------------
-# Initial Trust
-# -----------------------------
+# =====================================================
+# Adaptive Trust Filtering
+# =====================================================
+
+USE_TRUST_FILTER = True
+
+TRUST_FILTER_MODE = "adaptive"
+# Options:
+# "adaptive"
+# "fixed"
+
+FIXED_TRUST_THRESHOLD = 0.50
+
+STD_FACTOR = 0.50
 
 INITIAL_TRUST = 0.5
 
@@ -61,15 +106,13 @@ MIN_TRUST = 0.05
 
 MAX_TRUST = 1.0
 
-# -----------------------------
-# EMA
-# -----------------------------
-
 ALPHA = 0.7
 
-# -----------------------------
-# Behavior Score Weights
-# -----------------------------
+RECOVERY_THRESHOLD = 0.6
+
+RECOVERY_ROUNDS = 3
+
+RECOVERY_STEP = 0.05
 
 SIMILARITY_WEIGHT = 0.35
 
@@ -78,10 +121,6 @@ CONSISTENCY_WEIGHT = 0.25
 ALIGNMENT_WEIGHT = 0.20
 
 NORM_WEIGHT = 0.20
-
-# -----------------------------
-# Peer Grouping
-# -----------------------------
 
 PEER_SIMILARITY_THRESHOLD = 0.70
 

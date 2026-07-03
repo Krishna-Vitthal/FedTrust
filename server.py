@@ -4,7 +4,8 @@ from model import CNN
 
 from aggregation import (
     fedavg,
-    fedtrust
+    fedtrust,
+    filter_clients
 )
 
 from trust import TrustManager
@@ -29,6 +30,8 @@ class Server:
         self.trust_manager = TrustManager(
             NUM_CLIENTS
         )
+
+        self.last_aggregation_info = {}
 
     # =====================================================
     # Global Weights
@@ -64,6 +67,15 @@ class Server:
                 client_updates
             )
 
+            self.last_aggregation_info = {
+                "mode": "fedavg",
+                "filtered_client_ids": [],
+                "filtered_out_client_ids": [],
+                "filtered_count": 0,
+                "filtered_out_count": 0,
+                "total_clients": len(client_updates),
+            }
+
         # ---------------------------------------
         # FedTrust
         # ---------------------------------------
@@ -74,6 +86,15 @@ class Server:
                 client_updates
             )
 
+            filtered_updates = filter_clients(
+                client_updates,
+                trust_scores
+            )
+            kept_client_ids = {
+                client["client_id"]
+                for client in filtered_updates
+            }
+
             new_weights = fedtrust(
 
                 client_updates,
@@ -82,9 +103,28 @@ class Server:
 
             )
 
+            self.last_aggregation_info = {
+                "mode": "fedtrust",
+                "filtered_client_ids": [
+                    client["client_id"]
+                    for client in filtered_updates
+                ],
+                "filtered_out_client_ids": [
+                    client["client_id"]
+                    for client in client_updates
+                    if client["client_id"] not in kept_client_ids
+                ],
+                "filtered_count": len(filtered_updates),
+                "filtered_out_count": len(client_updates) - len(filtered_updates),
+                "total_clients": len(client_updates),
+                "trust_scores": trust_scores,
+            }
+
         self.global_model.load_state_dict(
             new_weights
         )
+
+        return self.last_aggregation_info
 
     # =====================================================
     # Trust Information
@@ -121,3 +161,7 @@ class Server:
     def get_peer_groups(self):
 
         return self.trust_manager.get_peer_groups()
+
+    def get_last_aggregation_info(self):
+
+        return self.last_aggregation_info
